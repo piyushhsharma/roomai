@@ -1,12 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, Search } from 'lucide-react'
+import { signOut, useSession } from 'next-auth/react'
+import { Bell, LogOut, Search } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { mockUser } from '@/lib/mock-data'
+import { getInitials } from '@/lib/user-display'
 
 export function DashboardTopbar({ title }: { title: string }) {
+  const { data: session } = useSession()
+  const user = session?.user
+  const label = user?.name || user?.email || 'Account'
+  const initials = getInitials(user?.name, user?.email)
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-slate-200/80 bg-white/80 px-4 backdrop-blur-xl dark:border-dark-border dark:bg-dark-bg/80 lg:px-8">
       <div>
@@ -27,16 +33,28 @@ export function DashboardTopbar({ title }: { title: string }) {
           href="/dashboard/settings"
           className="flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-2 py-1.5 dark:border-dark-border dark:bg-white/5"
         >
-          <span
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white"
-            style={{ background: mockUser.avatarGradient }}
-          >
-            {mockUser.initials}
-          </span>
-          <span className="hidden text-sm font-medium text-slate-700 dark:text-slate-200 sm:block">
-            {mockUser.name}
+          {user?.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.image} alt="" className="h-8 w-8 rounded-lg object-cover" />
+          ) : (
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-violet-600 text-xs font-bold text-white">
+              {initials}
+            </span>
+          )}
+          <span className="hidden max-w-[10rem] truncate text-sm font-medium text-slate-700 dark:text-slate-200 sm:block">
+            {label}
           </span>
         </Link>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="rounded-xl dark:border-dark-border"
+          aria-label="Log out"
+          onClick={() => signOut({ callbackUrl: '/' })}
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
       </div>
     </header>
   )

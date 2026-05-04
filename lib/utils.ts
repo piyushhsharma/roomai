@@ -20,6 +20,15 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
+export function formatRelativeTime(date: Date): string {
+  const s = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`
+  if (s < 86400) return `${Math.floor(s / 3600)} hr ago`
+  if (s < 604800) return `${Math.floor(s / 86400)} days ago`
+  return formatDate(date)
+}
+
 export function formatNumber(num: number): string {
   if (num >= 1000000) {
     return (num / 1000000).toFixed(1) + 'M'

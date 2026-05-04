@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import type { CSSProperties } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -10,7 +11,9 @@ import {
   Wand2,
   ChevronLeft,
   ChevronRight,
+  BookmarkPlus,
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/Button'
 import { Label } from '@/components/ui/Label'
 import { mockStyles } from '@/lib/mock-data'
@@ -40,6 +43,22 @@ function styleGradient(styleId: string): string {
   return `linear-gradient(135deg,${a},${b} 45%,${c})`
 }
 
+function afterCss(generated: string | null, styleId: string): CSSProperties {
+  if (!generated) {
+    return { background: styleGradient(styleId) }
+  }
+  if (generated.startsWith('http') || generated.startsWith('data:')) {
+    return {
+      backgroundImage: `url(${generated})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    }
+  }
+  return { background: generated }
+}
+
+type ProjectOpt = { id: string; name: string }
+
 export function DesignCanvas() {
   const {
     uploadedPreview,
@@ -62,14 +81,42 @@ export function DesignCanvas() {
 
   const [sliderPosition, setSliderPosition] = useState(50)
   const [isDragging, setIsDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadedImageId, setUploadedImageId] = useState<string | null>(null)
+  const [lastDesignId, setLastDesignId] = useState<string | null>(null)
+  const [persistUrl, setPersistUrl] = useState<string | null>(null)
+  const [projects, setProjects] = useState<ProjectOpt[]>([])
+  const [projectId, setProjectId] = useState<string>('')
+
+  useEffect(() => {
+    fetch('/api/projects')
+      .then((r) => r.json())
+      .then((d) => setProjects(d.projects?.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })) ?? []))
+      .catch(() => {})
+  }, [])
 
   const onDrop = useCallback(
-    (accepted: File[]) => {
+    async (accepted: File[]) => {
       const file = accepted[0]
       if (!file) return
-      const reader = new FileReader()
-      reader.onload = () => setUploaded(reader.result as string)
-      reader.readAsDataURL(file)
+      setUploading(true)
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch('/api/upload', { method: 'POST', body: fd })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast.error(data.error || 'Upload failed')
+          return
+        }
+        setUploaded(data.url)
+        setUploadedImageId(data.id)
+        toast.success('Image uploaded')
+      } catch {
+        toast.error('Upload failed')
+      } finally {
+        setUploading(false)
+      }
     },
     [setUploaded]
   )
@@ -78,24 +125,89 @@ export function DesignCanvas() {
     onDrop,
     accept: { 'image/*': [] },
     maxFiles: 1,
+    disabled: uploading || isGenerating,
   })
 
   const runGenerate = async () => {
     setGenerating(true)
-    setProgress(0)
-    const steps = [12, 38, 64, 88, 100]
-    for (const s of steps) {
-      await new Promise((r) => setTimeout(r, 320 + Math.random() * 180))
-      setProgress(s)
+    setProgress(8)
+    setLastDesignId(null)
+    setPersistUrl(null)
+    try {
+      const res = await fetch('/api/designs/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          styleId,
+          roomType,
+          palette,
+          prompt: prompt || undefined,
+          projectId: projectId || undefined,
+          uploadedImageId: uploadedImageId || undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error || 'Generation failed')
+        if (data.usage) {
+          toast(`Today: ${data.usage.used}/${data.usage.cap}`, { icon: '⏳' })
+        }
+        return
+      }
+      if (data.notice) toast(data.notice, { icon: 'ℹ️' })
+      const raw: string = data.design?.resultUrl
+      setPersistUrl(raw || null)
+      if (raw?.startsWith('http') || raw?.startsWith('data:')) {
+        setGenerated(raw)
+      } else {
+        setGenerated(styleGradient(data.design?.style || styleId))
+      }
+      setLastDesignId(data.design?.id ?? null)
+      setProgress(100)
+      toast.success(data.design?.isMock ? 'Preview ready (mock mode)' : 'Design generated')
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setGenerating(false)
     }
-    const g = styleGradient(styleId)
-    setGenerated(g)
-    setGenerating(false)
+  }
+
+  const saveInspiration = async () => {
+    if (!lastDesignId || !generatedPreview) {
+      toast.error('Generate a design first')
+      return
+    }
+    const imageUrl =
+      persistUrl && (persistUrl.startsWith('http') || persistUrl.startsWith('data:') || persistUrl.startsWith('mock:'))
+        ? persistUrl
+        : `mock://${styleId}`
+
+    const res = await fetch('/api/inspirations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `${mockStyles.find((s) => s.id === styleId)?.name ?? 'Style'} · ${roomType}`,
+        imageUrl,
+        designId: lastDesignId,
+      }),
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      toast.error(j.error || 'Could not save')
+      return
+    }
+    toast.success('Saved to inspirations')
   }
 
   const handleDownload = () => {
+    const target = generatedPreview
+    if (!target) return
+    if (target.startsWith('http')) {
+      window.open(target, '_blank', 'noopener,noreferrer')
+      return
+    }
     const link = document.createElement('a')
-    link.href = generatedPreview ?? styleGradient(styleId)
+    link.href = target
     link.download = `roomai-${styleId}.png`
     document.body.appendChild(link)
     link.click()
@@ -103,7 +215,8 @@ export function DesignCanvas() {
   }
 
   const beforeBg = uploadedPreview ?? 'linear-gradient(135deg,#475569,#94a3b8)'
-  const afterBg = generatedPreview ?? styleGradient(styleId)
+  const beforeIsUrl = beforeBg.startsWith('http') || beforeBg.startsWith('data:')
+  const afterStyle = afterCss(generatedPreview, styleId)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr] lg:gap-8">
@@ -120,20 +233,46 @@ export function DesignCanvas() {
               'flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-10 transition-colors',
               isDragActive
                 ? 'border-primary-500 bg-primary-500/10'
-                : 'border-slate-300 hover:border-primary-400 dark:border-slate-600'
+                : 'border-slate-300 hover:border-primary-400 dark:border-slate-600',
+              (uploading || isGenerating) && 'pointer-events-none opacity-60'
             )}
           >
             <input {...getInputProps()} />
             <Upload className="mb-2 h-8 w-8 text-slate-400" />
             <p className="text-center text-sm text-slate-600 dark:text-slate-400">
-              Drop an image or click to browse
+              {uploading ? 'Uploading…' : 'Drop an image or click to browse'}
             </p>
+            <p className="mt-1 text-center text-xs text-slate-500">Max 2MB · server-stored for generation</p>
           </div>
           {uploadedPreview && (
-            <Button variant="ghost" size="sm" className="mt-2" onClick={() => setUploaded(null)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() => {
+                setUploaded(null)
+                setUploadedImageId(null)
+              }}
+            >
               Remove image
             </Button>
           )}
+        </div>
+
+        <div>
+          <Label className="mb-2 block">Link to project (optional)</Label>
+          <select
+            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-dark-border dark:bg-white/5 dark:text-white"
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+          >
+            <option value="">No project</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
@@ -236,7 +375,7 @@ export function DesignCanvas() {
           className="w-full rounded-xl shadow-glow"
           size="lg"
           onClick={runGenerate}
-          disabled={isGenerating}
+          disabled={isGenerating || uploading}
           loading={isGenerating}
         >
           <Wand2 className="mr-2 h-4 w-4" />
@@ -275,7 +414,17 @@ export function DesignCanvas() {
             <h2 className="font-display text-lg font-semibold text-slate-900 dark:text-white">Output</h2>
             <p className="text-sm text-slate-500">Before / after · drag the handle</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl dark:border-dark-border"
+              onClick={saveInspiration}
+              disabled={!lastDesignId}
+            >
+              <BookmarkPlus className="mr-2 h-4 w-4" />
+              Save
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -324,11 +473,22 @@ export function DesignCanvas() {
               onMouseLeave={() => setIsDragging(false)}
             >
               <div className="relative aspect-[4/3] w-full md:aspect-video">
-                <div className="absolute inset-0" style={{ background: beforeBg }} />
+                <div
+                  className="absolute inset-0"
+                  style={
+                    beforeIsUrl
+                      ? {
+                          backgroundImage: `url(${beforeBg})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                        }
+                      : { background: beforeBg }
+                  }
+                />
                 <div
                   className="absolute inset-0"
                   style={{
-                    background: afterBg,
+                    ...afterStyle,
                     clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`,
                   }}
                 />

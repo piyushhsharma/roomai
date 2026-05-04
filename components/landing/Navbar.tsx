@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X, Sun, Moon } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 
@@ -19,6 +20,8 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const { theme, setTheme } = useTheme()
+  const { status } = useSession()
+  const authed = status === 'authenticated'
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 24)
@@ -68,12 +71,20 @@ export default function Navbar() {
             >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            <Button variant="ghost" asChild className="rounded-xl">
-              <Link href="/login">Log in</Link>
-            </Button>
-            <Button asChild className="rounded-xl shadow-glow">
-              <Link href="/signup">Get started</Link>
-            </Button>
+            {authed ? (
+              <Button asChild className="rounded-xl shadow-glow">
+                <Link href="/dashboard">Dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" asChild className="rounded-xl">
+                  <Link href="/login">Log in</Link>
+                </Button>
+                <Button asChild className="rounded-xl shadow-glow">
+                  <Link href="/signup">Get started</Link>
+                </Button>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-1 md:hidden">
@@ -132,16 +143,26 @@ export default function Navbar() {
                 ))}
               </nav>
               <div className="mt-auto space-y-2 border-t border-slate-200 p-4 dark:border-dark-border">
-                <Button variant="outline" className="w-full rounded-xl" asChild>
-                  <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
-                    Log in
-                  </Link>
-                </Button>
-                <Button className="w-full rounded-xl" asChild>
-                  <Link href="/signup" onClick={() => setIsMobileMenuOpen(false)}>
-                    Get started
-                  </Link>
-                </Button>
+                {authed ? (
+                  <Button className="w-full rounded-xl" asChild>
+                    <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
+                      Dashboard
+                    </Link>
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="outline" className="w-full rounded-xl" asChild>
+                      <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                        Log in
+                      </Link>
+                    </Button>
+                    <Button className="w-full rounded-xl" asChild>
+                      <Link href="/signup" onClick={() => setIsMobileMenuOpen(false)}>
+                        Get started
+                      </Link>
+                    </Button>
+                  </>
+                )}
               </div>
             </motion.aside>
           </motion.div>
