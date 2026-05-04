@@ -56,41 +56,28 @@ Open http://localhost:3000
 
 ## 🎯 How It Works
 
-1. **Sign Up** - Create account with Google OAuth or email
-2. **Upload Room** - Drag & drop room photo to the canvas
-3. **Choose Style** - Select from 50+ design styles (Modern, Scandinavian, Boho...)
-4. **Add Prompt** - Optional custom prompt for specific requirements
-5. **Generate** - AI transforms your room in seconds
-6. **Compare** - Use before/after slider to see results
-7. **Download** - Export 4K renders or save to projects
+1. **Upload** - User uploads room photo
+2. **Configure** - Select theme, colors, budget
+3. **Generate** - AI creates redesigned room
+4. **Shop** - Click furniture to see products
+5. **Buy** - Links to real product pages
 
 ## 🏗 Project Structure
 
 ```
 roomai/
-├── app/                      # Next.js App Router
-│   ├── (auth)/              # Authentication pages
-│   ├── (dashboard)/         # Dashboard pages
-│   ├── (marketing)/         # Landing page
-│   ├── api/                 # API routes
-│   ├── globals.css          # Global styles
-│   └── layout.tsx           # Root layout
-├── components/              # React components
-│   ├── ui/                  # Base UI components
-│   ├── landing/             # Landing page components
-│   ├── dashboard/           # Dashboard components
-│   └── canvas/              # Design canvas components
-├── lib/                     # Utility libraries
-│   ├── auth.ts              # NextAuth configuration
-│   ├── prisma.ts            # Prisma client
-│   ├── utils.ts             # Helper functions
-│   └── mock-data.ts         # Mock data for development
-├── prisma/                  # Database schema
-│   └── schema.prisma        # Prisma schema
-├── public/                  # Static assets
-├── tailwind.config.ts       # Tailwind configuration
-├── next.config.js           # Next.js configuration
-└── package.json             # Dependencies
+├── frontend/                 # Next.js frontend
+│   ├── src/
+│   │   ├── app/             # App Router pages
+│   │   └── components/      # React components
+├── backend/                  # FastAPI backend
+│   ├── app/
+│   │   ├── models/          # Database models
+│   │   ├── tasks/           # Celery tasks
+│   │   └── main.py          # API routes
+├── docker-compose.yml        # Development containers
+├── start-dev.sh             # Quick start script
+└── DEPLOYMENT.md            # Production guide
 ```
 
 ## 🧪 Development Modes
