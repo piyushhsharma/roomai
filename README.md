@@ -189,3 +189,26 @@ MIT License - feel free to use for commercial projects
 ---
 
 **Built for speed, designed for scale. 🚀**
+
+## RAG Integration
+
+RoomAI uses Retrieval-Augmented Generation to ground design recommendations in verified interior design principles.
+
+### Knowledge Base
+Located in /data/knowledge/ — markdown files covering styles, color theory, furniture placement, lighting, and room-specific guides.
+
+### Setup
+1. Ensure pgvector extension is enabled on your PostgreSQL instance
+2. Run prisma migration: npx prisma migrate dev
+3. Ingest knowledge base: npm run ingest
+4. Start the app normally: npm run dev
+
+### Adding New Knowledge
+Add any .md file to /data/knowledge/ in the appropriate subfolder, then re-run npm run ingest. The script is idempotent — it will only embed new chunks.
+
+### How It Works
+When a user requests room design suggestions, the system:
+1. Embeds the user's query using OpenAI text-embedding-3-small
+2. Retrieves the 5 most semantically similar design principles from PostgreSQL via pgvector cosine similarity
+3. Injects retrieved context into the system prompt before calling GPT
+4. Returns both the AI recommendation and the source chunks to the UI

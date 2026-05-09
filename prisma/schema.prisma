@@ -1,10 +1,12 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
 }
 
 // ——— NextAuth + app user ———
@@ -164,4 +166,16 @@ model ActivityLog {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+model DesignChunk {
+  id        String   @id @default(cuid())
+  content   String
+  embedding Unsupported("vector(1536)")
+  source    String
+  category  String
+  createdAt DateTime @default(now())
+
+  @@index([source])
+  @@index([category])
 }

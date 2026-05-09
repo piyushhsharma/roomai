@@ -12,13 +12,17 @@ import {
   ChevronLeft,
   ChevronRight,
   BookmarkPlus,
+  ChevronDown,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/Button'
 import { Label } from '@/components/ui/Label'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
 import { mockStyles } from '@/lib/mock-data'
 import { useCanvasStore, type RoomType } from '@/lib/stores/canvas-store'
 import { cn } from '@/lib/utils'
+import type { RAGChunk } from '@/types/rag'
 
 const roomTypes: { id: RoomType; label: string }[] = [
   { id: 'living', label: 'Living' },
@@ -87,6 +91,18 @@ export function DesignCanvas() {
   const [persistUrl, setPersistUrl] = useState<string | null>(null)
   const [projects, setProjects] = useState<ProjectOpt[]>([])
   const [projectId, setProjectId] = useState<string>('')
+  const [recommendations, setRecommendations] = useState('')
+  const [ragChunks, setRagChunks] = useState<RAGChunk[]>([])
+  const [isOpen, setIsOpen] = useState(false)
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({})
+
+  const categoryColor: Record<string, string> = {
+    styles: 'bg-violet-500/20 text-violet-200 border-violet-500/40',
+    'color-theory': 'bg-amber-500/20 text-amber-200 border-amber-500/40',
+    furniture: 'bg-blue-500/20 text-blue-200 border-blue-500/40',
+    lighting: 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40',
+    rooms: 'bg-green-500/20 text-green-200 border-green-500/40',
+  }
 
   useEffect(() => {
     fetch('/api/projects')
@@ -133,6 +149,9 @@ export function DesignCanvas() {
     setProgress(8)
     setLastDesignId(null)
     setPersistUrl(null)
+    setRecommendations('')
+    setRagChunks([])
+    setExpandedCards({})
     try {
       const res = await fetch('/api/designs/generate', {
         method: 'POST',
@@ -155,6 +174,8 @@ export function DesignCanvas() {
         return
       }
       if (data.notice) toast(data.notice, { icon: 'ℹ️' })
+      setRecommendations(typeof data.recommendations === 'string' ? data.recommendations : '')
+      setRagChunks(Array.isArray(data.rag?.chunks) ? (data.rag.chunks as RAGChunk[]) : [])
       const raw: string = data.design?.resultUrl
       setPersistUrl(raw || null)
       if (raw?.startsWith('http') || raw?.startsWith('data:')) {
@@ -528,6 +549,80 @@ export function DesignCanvas() {
             </div>
           ))}
         </div>
+
+        {recommendations ? (
+          <Card className="mt-5 border-slate-200/80 bg-slate-50/80 dark:border-dark-border dark:bg-white/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">AI design recommendation</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300">
+                {recommendations}
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {ragChunks.length > 0 ? (
+          <div className="mt-5 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-dark-border dark:bg-white/5">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setIsOpen((v) => !v)}
+            >
+              <div>
+                <p className="text-base font-semibold text-slate-900 dark:text-white">
+                  Design principles used in this recommendation
+                </p>
+                <p className="text-xs text-slate-500">RAG-retrieved from interior design knowledge base</p>
+              </div>
+              <span className="ml-3 rounded-lg border border-slate-200 bg-white p-2 dark:border-dark-border dark:bg-dark-card">
+                <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180')} />
+              </span>
+            </button>
+
+            {isOpen ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {ragChunks.map((chunk) => {
+                  const expanded = expandedCards[chunk.id] ?? false
+                  return (
+                    <div
+                      key={chunk.id}
+                      className="rounded-xl border border-slate-200 bg-white p-3 dark:border-dark-border dark:bg-dark-card"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <Badge
+                          className={cn(
+                            'border px-2 py-0.5 text-[10px] uppercase tracking-wide',
+                            categoryColor[chunk.category] || 'bg-slate-500/20 text-slate-200 border-slate-500/40'
+                          )}
+                        >
+                          {chunk.category}
+                        </Badge>
+                        <span className="text-[11px] text-slate-500">{chunk.source}</span>
+                      </div>
+                      <p className={cn('text-sm text-slate-700 dark:text-slate-300', !expanded && 'line-clamp-3')}>
+                        {chunk.content}
+                      </p>
+                      <button
+                        type="button"
+                        className="mt-2 text-xs font-medium text-primary-500 hover:text-primary-400"
+                        onClick={() =>
+                          setExpandedCards((prev) => ({
+                            ...prev,
+                            [chunk.id]: !expanded,
+                          }))
+                        }
+                      >
+                        {expanded ? 'read less' : 'read more'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </motion.section>
     </div>
   )
